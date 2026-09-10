@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Omakase Travel Planner</title>
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          paper:   '#FBF9F5',
+          card:    '#FFFFFF',
+          ink:     '#1C1917',
+          muted:   '#78716C',
+          line:    '#E8E3DA',
+          accent:  '#C1502E',
+          accent2: '#8A6D3B',
+          deep:    '#243447'
+        },
+        fontFamily: {
+          display: ['"Instrument Serif"', 'Georgia', 'serif'],
+          sans: ['Inter', 'system-ui', '-apple-system', 'Segoe UI', 'sans-serif']
+        }
+      }
+    }
+  }
+</script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+  html { scroll-behavior: smooth; }
+  body { background-color: #FBF9F5; }
+
+  /* Subtle paper grain so the off-white doesn't read as flat grey */
+  body::before {
+    content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0; opacity: .35;
+    background-image: radial-gradient(#E4DED2 1px, transparent 1px);
+    background-size: 22px 22px;
+  }
+
+  @keyframes unwrap {
+    from { opacity: 0; transform: translateY(14px) scale(.985); }
+    to   { opacity: 1; transform: none; }
+  }
+  .unwrap { animation: unwrap .5s cubic-bezier(.22,.61,.36,1) both; }
+
+  @keyframes railgrow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+  .rail { transform-origin: top; animation: railgrow .8s cubic-bezier(.22,.61,.36,1) both; }
+
+  @keyframes shimmer { to { background-position: -200% 0; } }
+  .shimmer {
+    background: linear-gradient(90deg, #EDE8DF 0%, #F7F4EE 50%, #EDE8DF 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s linear infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .unwrap, .rail, .shimmer { animation: none !important; }
+  }
+
+  /* Native select arrow removal, replaced by our own chevron */
+  select { -webkit-appearance: none; appearance: none; }
+
+  /* Emoji carry the six know-how categories, so give them a real fallback
+     chain — bare system-ui renders tofu on most Linux desktops. */
+  .emoji {
+    font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji',
+                 'Twemoji Mozilla', 'Android Emoji', sans-serif;
+    font-variant-emoji: emoji;
+  }
+
+  /* Anything we scroll to must clear the sticky header. */
+  #output { scroll-margin-top: 88px; }
+
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: #DDD6C9; border-radius: 99px; border: 3px solid #FBF9F5; }
+</style>
+</head>
+
+<body class="font-sans text-ink antialiased">
+
+<div class="relative z-10">
+
+  <!-- ══════════ HEADER ══════════ -->
+  <header class="border-b border-line bg-paper/85 backdrop-blur sticky top-0 z-30">
+    <div class="mx-auto max-w-[1400px] px-5 sm:px-8 py-4 flex items-center justify-between gap-4">
+      <div class="flex items-center gap-3.5 min-w-0">
+        <div class="h-10 w-10 shrink-0 rounded-full bg-accent grid place-items-center text-white font-display text-xl leading-none shadow-sm">お</div>
+        <div class="min-w-0">
+          <h1 class="font-display text-[22px] sm:text-[26px] leading-tight tracking-tight">Omakase Travel Planner</h1>
+          <p class="text-[11px] sm:text-xs text-muted leading-tight truncate">MBTI × local know-how, shaped into a trip that's only yours</p>
+        </div>
+      </div>
+      <div id="sourceBadge" class="hidden sm:flex items-center gap-2 shrink-0 rounded-full border border-line bg-white px-3 py-1.5 text-[11px] font-medium text-muted">
+        <span id="sourceDot" class="h-1.5 w-1.5 rounded-full bg-stone-300"></span>
+        <span id="sourceText">Ready</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ══════════ MAIN ══════════ -->
+  <main class="mx-auto max-w-[1400px] px-5 sm:px-8 py-7 grid gap-7 lg:grid-cols-[370px_minmax(0,1fr)] items-start">
+
+    <!-- ─── FORM ─── -->
+    <aside class="lg:sticky lg:top-[89px]">
+      <form id="planForm" class="rounded-2xl border border-line bg-card p-5 sm:p-6 shadow-[0_1px_2px_rgba(28,25,23,.04),0_8px_24px_-12px_rgba(28,25,23,.10)]">
+
+        <div class="flex items-baseline justify-between mb-5">
+          <h2 class="font-display text-xl">Tell us just enough</h2>
+          <span class="text-[10px] uppercase tracking-[.12em] text-muted">5 fields</span>
+        </div>
+
+        <!-- MBTI -->
+        <label class="block mb-4">
+          <span class="block text-xs font-semibold mb-1.5">Your MBTI type</span>
+          <div class="relative">
+            <select id="mbti" required
+              class="w-full rounded-xl border border-line bg-paper px-3.5 py-2.5 pr-9 text-sm font-medium outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/15">
+            </select>
+            <svg class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 8l4 4 4-4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <p id="mbtiHint" class="mt-1.5 text-[11px] leading-snug text-muted"></p>
+        </label>
+
+        <!-- From / To -->
+        <div class="grid grid-cols-2 gap-3 mb-4">
+          <label class="block">
+            <span class="block text-xs font-semibold mb-1.5">From</span>
+            <input id="origin" type="text" required placeholder="Haneda Airport"
+              class="w-full rounded-xl border border-line bg-paper px-3.5 py-2.5 text-sm outline-none transition placeholder:text-stone-400 focus:border-accent focus:ring-2 focus:ring-accent/15">
+          </label>
+          <label class="block">
+            <span class="block text-xs font-semibold mb-1.5">To</span>
+            <input id="destination" type="text" required placeholder="San Francisco"
+              class="w-full rounded-xl border border-line bg-paper px-3.5 py-2.5 text-sm outline-none transition placeholder:text-stone-400 focus:border-accent focus:ring-2 focus:ring-accent/15">
+          </label>
+        </div>
+
+        <!-- Dates -->
+        <label class="block mb-4">
+          <span class="block text-xs font-semibold mb-1.5">Dates</span>
+          <input id="dates" type="text" required placeholder="2026/10/01 - 10/03"
+            class="w-full rounded-xl border border-line bg-paper px-3.5 py-2.5 text-sm outline-none transition placeholder:text-stone-400 focus:border-accent focus:ring-2 focus:ring-accent/15">
+        </label>
+
+        <!-- Notes -->
+        <label class="block mb-5">
+          <span class="block text-xs font-semibold mb-1.5">Anything else <span class="font-normal text-muted">— optional</span></span>
+          <textarea id="notes" rows="3" placeholder="I want quiet time. I love hopping between cafés."
+            class="w-full resize-none rounded-xl border border-line bg-paper px-3.5 py-2.5 text-sm leading-relaxed outline-none transition placeholder:text-stone-400 focus:border-accent focus:ring-2 focus:ring-accent/15"></textarea>
+        </label>
+
+        <!-- Submit -->
+        <button id="submitBtn" type="submit"
+          class="group relative w-full overflow-hidden rounded-xl bg-ink px-4 py-3 text-sm font-semibold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60">
+          <span id="submitIdle" class="flex items-center justify-center gap-2">
+            Create my itinerary
+            <svg class="h-4 w-4 transition-transform group-hover:translate-x-0.5" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 10h11m0 0l-4-4m4 4l-4 4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+          <span id="submitBusy" class="hidden items-center justify-center gap-2">
+            <svg class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-opacity=".28" stroke-width="3"/><path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
+            Composing…
+          </span>
+        </button>
+
+        <!-- Demo -->
+        <button id="demoBtn" type="button"
+          class="mt-2.5 w-full rounded-xl border border-dashed border-line bg-paper px-4 py-2.5 text-xs font-medium text-muted transition hover:border-accent/40 hover:bg-accent/[.04] hover:text-accent">
+          <span class="mr-1">▸</span> Load demo data <span id="demoNext" class="font-semibold"></span>
+        </button>
+        <p class="mt-2 text-center text-[10.5px] leading-snug text-stone-400">
+          Same city, same dates — a different type gets a different trip.
+        </p>
+      </form>
+    </aside>
+
+    <!-- ─── OUTPUT ─── -->
+    <section id="output" class="min-h-[70vh]">
+
+      <!-- Empty state -->
+      <div id="stateEmpty" class="rounded-2xl border border-dashed border-line bg-card/50 px-6 py-16 text-center">
+        <div class="mx-auto mb-5 grid h-16 w-16 place-items-center emoji rounded-full border border-line bg-paper text-3xl">🎁</div>
+        <h3 class="font-display text-2xl mb-2">Your itinerary arrives here</h3>
+        <p class="mx-auto max-w-md text-sm leading-relaxed text-muted">
+          You give us five fields. We hand back a timed plan where every stop explains
+          <em class="font-display not-italic text-ink">why it suits you</em> — plus the weather, transport and
+          safety notes a well-travelled friend would mention before you asked.
+        </p>
+        <div class="mx-auto mt-7 flex max-w-lg flex-wrap justify-center gap-2">
+          <span class="rounded-full border border-line bg-white px-3 py-1.5 text-[11px] text-muted"><span class="emoji">🌤️</span> Weather → what to wear</span>
+          <span class="rounded-full border border-line bg-white px-3 py-1.5 text-[11px] text-muted"><span class="emoji">🚗</span> Transport tricks</span>
+          <span class="rounded-full border border-line bg-white px-3 py-1.5 text-[11px] text-muted"><span class="emoji">🍽️</span> Local, not touristy</span>
+          <span class="rounded-full border border-line bg-white px-3 py-1.5 text-[11px] text-muted"><span class="emoji">🛡️</span> Safety heads-up</span>
+          <span class="rounded-full border border-line bg-white px-3 py-1.5 text-[11px] text-muted"><span class="emoji">🎁</span> Souvenirs by recipient</span>
+        </div>
+      </div>
+
+      <!-- Loading state -->
+      <div id="stateLoading" class="hidden">
+        <div class="rounded-2xl border border-line bg-card p-6">
+          <div class="flex items-center gap-3">
+            <svg class="h-5 w-5 animate-spin text-accent" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-opacity=".25" stroke-width="3"/><path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
+            <div>
+              <p class="text-sm font-semibold">Composing your omakase</p>
+              <p id="loadingStep" class="text-xs text-muted">Reading the weather for your dates…</p>
+            </div>
+          </div>
+          <div class="mt-6 space-y-3">
+            <div class="shimmer h-24 rounded-xl"></div>
+            <div class="shimmer h-24 rounded-xl"></div>
+            <div class="shimmer h-24 rounded-xl"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Result state -->
+      <div id="stateResult" class="hidden space-y-6"></div>
+    </section>
+  </main>
+
+  <footer class="border-t border-line px-5 sm:px-8 py-6 text-center text-[11px] text-stone-400">
+    Omakase Travel Planner — hackathon prototype. Itinerary content shown here is sample data.
+  </footer>
+</div>
+
+<script>
+/* ══════════════════════════════════════════════════════════════════
+   MBTI reference
+   ══════════════════════════════════════════════════════════════════ */
+const MBTI = {
+  INTJ:{name:'Architect',  hint:'Plans with depth. Wants the reasoning, not the brochure.'},
+  INTP:{name:'Logician',   hint:'Follows curiosity. Prefers loose structure with room to wander.'},
+  ENTJ:{name:'Commander',  hint:'Decisive pace. No dead time between stops.'},
+  ENTP:{name:'Debater',    hint:'Chases novelty. Happy when a plan takes a turn.'},
+  INFJ:{name:'Advocate',   hint:'Seeks meaning. One deep place beats five shallow ones.'},
+  INFP:{name:'Mediator',   hint:'Values quiet and atmosphere over checking off landmarks.'},
+  ENFJ:{name:'Protagonist',hint:'Draws energy from people and shared moments.'},
+  ENFP:{name:'Campaigner', hint:'Loves spontaneity. Leave gaps to be filled on the day.'},
+  ISTJ:{name:'Logistician',hint:'Wants times, addresses and a plan that holds.'},
+  ISFJ:{name:'Defender',   hint:'Comfort first. Familiar rhythms, gentle transitions.'},
+  ESTJ:{name:'Executive',  hint:'Efficient and complete. Hit the landmarks, waste nothing.'},
+  ESFJ:{name:'Consul',     hint:'Warm, social settings and places worth sharing.'},
+  ISTP:{name:'Virtuoso',   hint:'Hands-on and mobile. Prefers doing to viewing.'},
+  ISFP:{name:'Adventurer', hint:'Led by beauty and mood. Aesthetics over itinerary.'},
+  ESTP:{name:'Entrepreneur',hint:'High energy, physical, in-the-moment.'},
+  ESFP:{name:'Entertainer',hint:'Lively, colourful, made for company.'}
+};
+
+/* Chip styling by category */
+const CHIP = {
+  weather:  {icon:'🧥', cls:'border-sky-200/80 bg-sky-50 text-sky-900'},
+  transport:{icon:'🚗', cls:'border-indigo-200/80 bg-indigo-50 text-indigo-900'},
+  food:     {icon:'🍽️', cls:'border-rose-200/80 bg-rose-50 text-rose-900'},
+  safety:   {icon:'🛡️', cls:'border-amber-200/80 bg-amber-50 text-amber-900'},
+  souvenir: {icon:'🎁', cls:'border-violet-200/80 bg-violet-50 text-violet-900'},
+  culture:  {icon:'✨', cls:'border-emerald-200/80 bg-emerald-50 text-emerald-900'}
+};
+const chipStyle = t => CHIP[t] || {icon:'📍', cls:'border-line bg-paper text-muted'};
+
+/* ══════════════════════════════════════════════════════════════════
+   Mock itineraries — the demo safety net.
+   Same city, same dates, two types, two completely different trips.
+   ══════════════════════════════════════════════════════════════════ */
+const MOCK = {
+
+INFP: {
+  trip: {
+    mbti:'INFP', origin:'Haneda Airport (HND)', destination:'San Francisco',
+    dates:'2026/10/01 - 10/03',
+    headline:'Three days of fog, second-hand books and long counters',
+    summary:'We kept the crowds at arm’s length. Mornings start before the city does, meals are at counters rather than tables, and every afternoon has an hour with nothing scheduled in it — on purpose.'
+  },
+  briefing:[
+    {type:'weather',  title:'Two seasons in one day',   text:'Oct mornings sit near 13°C with coastal fog; by 2pm the Mission hits 24°C. One light layer you can carry solves the whole trip.'},
+    {type:'transport',title:'Waymo beats Uber at night', text:'After 9pm Waymo is usually cheaper on this route and takes no tip. Cable cars are cash-or-app only — buy in MuniMobile before you queue.'},
+    {type:'food',     title:'Where locals actually eat', text:'Skip Fisherman’s Wharf entirely. The Richmond and Outer Sunset are where San Franciscans eat on their own days off.'},
+    {type:'safety',   title:'Two blocks worth avoiding', text:'Standard city awareness. Around 6th & Market and parts of the Tenderloin, keep your phone in your pocket — daytime included.'},
+    {type:'souvenir', title:'For a quiet friend',        text:'Recchiuti burnt-caramel chocolate from the Ferry Building travels well. For someone older, Heath Ceramics seconds — same clay, a third off.'},
+    {type:'culture',  title:'On right now',              text:'The de Young’s late-Friday programme runs to 8:45pm with live music in the court — far emptier than a weekend afternoon.'}
+  ],
+  days:[
+    { day:1, date:'Wed, Oct 1', title:'Landing softly',
+      items:[
+        {time:'09:20', duration:'70 min', title:'Land at SFO, take BART rather than a taxi', place:'SFO → Civic Center',
+         reason:'A taxi drops you into traffic and small talk after eleven hours of flying. The BART ride gives you thirty wordless minutes to arrive properly.',
+         chips:[{type:'transport',text:'$10.90 Clipper on your phone — no ticket queue'},{type:'weather',text:'Fog on landing is normal, it burns off by noon'}]},
+        {time:'11:00', duration:'30 min', title:'Drop bags in Hayes Valley, don’t check in yet', place:'Hayes Valley',
+         reason:'The neighbourhood is low-rise and walkable, and it means you’re never more than fifteen minutes from a door you can close.',
+         chips:[{type:'safety',text:'Well-lit and calm after dark, unlike blocks just east'}]},
+        {time:'12:30', duration:'90 min', title:'Lunch at the copper bar at Zuni Café', place:'Market St',
+         reason:'Ask for the bar, not a table. You get the wood-oven roast chicken, the whole room to watch, and nobody expecting conversation.',
+         chips:[{type:'food',text:'The chicken takes 60 min — order it the moment you sit'}]},
+        {time:'14:30', duration:'2 hr', title:'The Japanese Tea Garden, late afternoon', place:'Golden Gate Park',
+         reason:'Everyone comes at opening. By half past two the tour groups have gone and the moon bridge is yours — which is the only way this garden is worth seeing.',
+         chips:[{type:'culture',text:'Free entry before 10am, but the quiet after 2pm is worth $15'},{type:'weather',text:'Shaded and 3–4°C cooler than the street'}]},
+        {time:'17:00', duration:'90 min', title:'Andy Goldsworthy’s cracked stone floor at the de Young', place:'Golden Gate Park',
+         reason:'The fissure runs across the entrance courtyard and costs nothing to stand on. Then the observation tower, which is free and almost always empty.',
+         chips:[{type:'culture',text:'Tower closes 4:30pm — go up first, gallery after'}]},
+        {time:'19:00', duration:'2 hr', title:'Dinner at Rintaro', place:'Mission District',
+         reason:'A hinoki-wood izakaya built by a chef who trained in Kyoto. Warm, dim, and loud enough that your table feels private.',
+         chips:[{type:'food',text:'Book 30 days out, or take a walk-in seat at 5:30pm'},{type:'transport',text:'Waymo back — cheaper than Uber at this hour, no tip'}]}
+      ]},
+    { day:2, date:'Thu, Oct 2', title:'Out to the edge of the land',
+      items:[
+        {time:'09:30', duration:'45 min', title:'Croissant at Arsicault, before the line forms', place:'Inner Richmond',
+         reason:'Named the best croissant in America and it still runs out. At half nine you wait five minutes; at eleven you wait forty.',
+         chips:[{type:'food',text:'Cash tips only, card fine for the pastry'}]},
+        {time:'10:45', duration:'2 hr', title:'Walk the Lands End Trail to the Sutro Baths ruins', place:'Lands End',
+         reason:'Cliffs, cypress, and a shipwreck visible at low tide. Then the ruins of a Victorian swimming palace, half flooded, with nobody explaining anything to you.',
+         chips:[{type:'weather',text:'Wind off the Pacific — the layer earns its keep here'},{type:'safety',text:'Stay on the path near the cliff edge, it undercuts'}]},
+        {time:'13:15', duration:'90 min', title:'Lunch at Outerlands', place:'Outer Sunset',
+         reason:'Sourdough bread baked in-house, served in a room panelled with reclaimed driftwood two blocks from the ocean.',
+         chips:[{type:'food',text:'The Dutch pancake is the order, whatever time it is'}]},
+        {time:'15:00', duration:'60 min', title:'Ocean Beach with nothing planned', place:'Ocean Beach',
+         reason:'This hour is deliberately empty. Sit on the sand wall, watch the surfers, let the trip catch up with you.',
+         chips:[{type:'weather',text:'Coldest point of the day — fog usually rolls back in by 4pm'}]},
+        {time:'16:30', duration:'75 min', title:'Green Apple Books, upstairs', place:'Clement St',
+         reason:'Creaking floors, handwritten staff cards on every shelf, and a used section deep enough to lose an hour in.',
+         chips:[{type:'souvenir',text:'A used Beat-era paperback beats any gift shop item'}]},
+        {time:'19:00', duration:'2 hr', title:'Dinner at Nopalito', place:'Alamo Square',
+         reason:'Regional Mexican from a kitchen that grinds its own masa. Small, bright, and the sort of place people go back to on a Tuesday.',
+         chips:[{type:'food',text:'No reservations — put your name down, walk the square for 20 min'}]}
+      ]},
+    { day:3, date:'Fri, Oct 3', title:'Water, then home',
+      items:[
+        {time:'09:00', duration:'90 min', title:'Ferry Building farmers market', place:'Embarcadero',
+         reason:'Friday is a full market day. Stone fruit at the end of its season, oysters shucked in front of you, and no entrance to pay.',
+         chips:[{type:'food',text:'Get there before 10am or the good stalls sell through'}]},
+        {time:'11:00', duration:'2 hr', title:'Ferry to Sausalito — sit on the right side', place:'Bay crossing',
+         reason:'Cheaper than any bay cruise and you pass under the same bridge. The right-hand rail gives you the skyline receding.',
+         chips:[{type:'transport',text:'$14 one way on Clipper, roughly a third of a tour boat'}]},
+        {time:'13:00', duration:'75 min', title:'Lunch on the deck at Fish.', place:'Sausalito',
+         reason:'Cash-preferred, paper plates, and the best Dungeness crab roll on the water. You eat facing the boats.',
+         chips:[{type:'food',text:'Bring cash — the card queue is twice as long'}]},
+        {time:'15:00', duration:'60 min', title:'Souvenir run, one stop only', place:'Ferry Building',
+         reason:'Recchiuti for chocolate, Heath for ceramics, both under one roof on the way back to the train.',
+         chips:[{type:'souvenir',text:'Chocolate survives the flight; ask for the insulated sleeve'}]},
+        {time:'16:30', duration:'—', title:'BART to SFO', place:'Embarcadero → SFO',
+         reason:'Thirty-five minutes door to terminal, and it leaves you a genuine two-hour buffer rather than a theoretical one.',
+         chips:[{type:'transport',text:'Yellow line, direct — no transfer at Balboa Park'}]}
+      ]}
+  ]
+},
+
+ESTJ: {
+  trip: {
+    mbti:'ESTJ', origin:'Haneda Airport (HND)', destination:'San Francisco',
+    dates:'2026/10/01 - 10/03',
+    headline:'Every landmark, in the only order that actually works',
+    summary:'Built around what has to be booked and what has to be done in daylight. Alcatraz anchors day one because its slots sell out first; the bridge is early on day two because the fog wins after ten. Nothing here doubles back on itself.'
+  },
+  briefing:[
+    {type:'weather',  title:'The bridge has a window',    text:'Fog clears at the Golden Gate around 9–10am and often returns by 4pm. Photograph it in the morning or not at all.'},
+    {type:'transport',title:'Cable car queue arithmetic', text:'The Powell turntable queue runs 40+ min. Board one stop up at Powell & Sutter instead — same car, five minutes.'},
+    {type:'food',     title:'One tourist meal, done well',text:'If you’re doing the Wharf, Scoma’s is the one that survives scrutiny — it runs its own fishing boat.'},
+    {type:'safety',   title:'Route around, not through',  text:'Walking from Union Square to Civic Center takes you through the Tenderloin. Take the BART one stop instead.'},
+    {type:'souvenir', title:'Buy on the last day',        text:'Everything worth taking home is sold within two blocks of Union Square. Don’t carry it around for three days.'},
+    {type:'culture',  title:'Book these now',             text:'Alcatraz releases tickets 90 days ahead and sells out weeks in advance. It is the one item with no fallback.'}
+  ],
+  days:[
+    { day:1, date:'Wed, Oct 1', title:'The waterfront, cleared in one pass',
+      items:[
+        {time:'09:20', duration:'40 min', title:'SFO → Powell St by BART', place:'SFO → Union Square',
+         reason:'Direct, fixed price, immune to the 101 backing up. A taxi costs four times as much and is slower at this hour.',
+         chips:[{type:'transport',text:'$10.90, yellow line, 30 min platform to platform'}]},
+        {time:'10:30', duration:'25 min', title:'Bags at the hotel desk — check in tonight', place:'Union Square',
+         reason:'Rooms aren’t ready before 3pm anyway. Drop, don’t wait, and you gain four hours of daylight.',
+         chips:[{type:'safety',text:'Head north and east from the hotel, not west past 6th'}]},
+        {time:'11:15', duration:'45 min', title:'Powell–Hyde cable car to the top', place:'Powell St',
+         reason:'The Hyde line is the one with the bay view drop. Board at Powell & Sutter and skip the turntable queue entirely.',
+         chips:[{type:'transport',text:'$8 flat — load it in MuniMobile before you board'}]},
+        {time:'12:00', duration:'30 min', title:'Lombard Street, downhill side', place:'Russian Hill',
+         reason:'Photograph from the bottom at Leavenworth, not the top. Ten minutes is genuinely enough for this one.',
+         chips:[{type:'culture',text:'Eight turns, and the flowers are still in bloom in October'}]},
+        {time:'12:45', duration:'60 min', title:'Lunch at Boudin, upstairs', place:'Fisherman’s Wharf',
+         reason:'The upstairs dining room is calm while the ground floor is chaos, and you can watch the bakers shape the sourdough through the window.',
+         chips:[{type:'food',text:'The clam chowder bread bowl, once, and then never again'}]},
+        {time:'14:00', duration:'3 hr', title:'Alcatraz — the 14:15 sailing', place:'Pier 33',
+         reason:'The audio tour is narrated by men who were imprisoned there, and it is genuinely excellent. Afternoon sailings are markedly less crowded than morning ones.',
+         chips:[{type:'culture',text:'Book 90 days ahead — this sells out and has no walk-up'},{type:'weather',text:'Cold on the water even in sun; the cell block is colder'}]},
+        {time:'18:30', duration:'90 min', title:'Dinner at Scoma’s', place:'Pier 47',
+         reason:'Operating since 1965 with its own boat at the pier behind it. The one Wharf restaurant that isn’t coasting on the location.',
+         chips:[{type:'food',text:'Reserve — the 6:30 slot fills a week out'},{type:'transport',text:'Waymo back to Union Square, ~$18, no tip'}]}
+      ]},
+    { day:2, date:'Thu, Oct 2', title:'Bridge first, city after',
+      items:[
+        {time:'08:45', duration:'75 min', title:'Golden Gate Bridge from Battery Spencer', place:'Marin Headlands',
+         reason:'The Marin side looks back at the bridge with the city behind it — the shot everyone wants and few get, because they go to the wrong side at the wrong hour.',
+         chips:[{type:'weather',text:'The 9–10am clear window. After that, fog.'},{type:'transport',text:'Rideshare up, ~$32 — no bus serves this viewpoint'}]},
+        {time:'10:30', duration:'60 min', title:'Palace of Fine Arts', place:'Marina District',
+         reason:'A 1915 World’s Fair rotunda, on the way back from the bridge and takes exactly as long as it deserves.',
+         chips:[{type:'culture',text:'Free, always open, and the swans are real'}]},
+        {time:'12:00', duration:'60 min', title:'Lunch on Chestnut Street', place:'Marina',
+         reason:'Where the neighbourhood eats rather than where the coaches stop, and it’s directly between the two morning stops and the afternoon ones.',
+         chips:[{type:'food',text:'Plenty of options — no booking needed on a weekday'}]},
+        {time:'13:30', duration:'45 min', title:'Painted Ladies at Alamo Square', place:'Alamo Square',
+         reason:'Stand at the top of the park lawn for the row with the skyline behind it. Fifteen minutes of photographs, then move.',
+         chips:[{type:'culture',text:'Afternoon light hits the facades — morning is backlit'}]},
+        {time:'14:45', duration:'60 min', title:'Twin Peaks, the full 360°', place:'Twin Peaks',
+         reason:'The only point that shows you the entire city, both bridges and the bay in one turn. Worth it purely to understand the geography you’ve been moving through.',
+         chips:[{type:'weather',text:'20°C down in the Mission, 12°C and windy up here'}]},
+        {time:'16:15', duration:'75 min', title:'Mission murals and a Tartine loaf', place:'Mission District',
+         reason:'Clarion Alley is a working, repainted mural corridor, and Tartine is two blocks from its far end.',
+         chips:[{type:'food',text:'Tartine’s morning buns sell out by 3pm — the country loaf won’t'}]},
+        {time:'19:00', duration:'2 hr', title:'Dinner at Foreign Cinema', place:'Mission District',
+         reason:'Films projected onto the courtyard wall while you eat. Books reliably, delivers reliably, and gives the day a proper ending.',
+         chips:[{type:'food',text:'Ask for a courtyard table when booking, not indoors'}]}
+      ]},
+    { day:3, date:'Fri, Oct 3', title:'Close the loop',
+      items:[
+        {time:'09:00', duration:'75 min', title:'Chinatown from the Dragon Gate up', place:'Grant Ave',
+         reason:'The oldest Chinatown in North America. Walk Grant to Stockton, then cut down Ross Alley past the fortune cookie factory.',
+         chips:[{type:'culture',text:'Golden Gate Fortune Cookie Factory — $1 to watch, cash'}]},
+        {time:'10:45', duration:'75 min', title:'Ferry Building, Friday market', place:'Embarcadero',
+         reason:'Downhill from Chinatown and the last item that needs daylight. Full market day, so the outdoor stalls are all running.',
+         chips:[{type:'food',text:'Hog Island oysters at the back bar — fastest queue before noon'}]},
+        {time:'12:15', duration:'60 min', title:'Lunch, Ferry Building marketplace', place:'Embarcadero',
+         reason:'Eat where you already are. No transit time lost on the last day.',
+         chips:[{type:'food',text:'Counter seating turns over quickly — don’t wait for a table'}]},
+        {time:'13:30', duration:'90 min', title:'Souvenirs, Union Square in one sweep', place:'Union Square',
+         reason:'Everything in one radius: Recchiuti chocolate, Ghirardelli for colleagues, Japantown stationery if there’s time.',
+         chips:[{type:'souvenir',text:'For older relatives: Heath Ceramics seconds, a third off'},{type:'souvenir',text:'For a group: individually wrapped chocolate, no favourites'}]},
+        {time:'15:30', duration:'—', title:'BART to SFO', place:'Powell St → SFO',
+         reason:'Thirty minutes and it goes under the traffic. Leaves a real buffer before an international departure.',
+         chips:[{type:'transport',text:'Yellow line direct — confirm the sign says SFO, not Millbrae'}]}
+      ]}
+  ]
+}
+};
+
+/* Demo form inputs paired with each mock */
+const DEMO_INPUTS = {
+  INFP:{mbti:'INFP', origin:'Haneda Airport', destination:'San Francisco', dates:'2026/10/01 - 10/03',
+        notes:'I want quiet time. I love hopping between cafés and second-hand bookshops.'},
+  ESTJ:{mbti:'ESTJ', origin:'Haneda Airport', destination:'San Francisco', dates:'2026/10/01 - 10/03',
+        notes:'First visit — I want to cover the major landmarks without wasting time.'}
+};
+
+/* ══════════════════════════════════════════════════════════════════
+   DOM
+   ══════════════════════════════════════════════════════════════════ */
+const $ = id => document.getElementById(id);
+const el = {
+  form:$('planForm'), mbti:$('mbti'), mbtiHint:$('mbtiHint'),
+  origin:$('origin'), destination:$('destination'), dates:$('dates'), notes:$('notes'),
+  submitBtn:$('submitBtn'), submitIdle:$('submitIdle'), submitBusy:$('submitBusy'),
+  demoBtn:$('demoBtn'), demoNext:$('demoNext'),
+  empty:$('stateEmpty'), loading:$('stateLoading'), loadingStep:$('loadingStep'), result:$('stateResult'),
+  badge:$('sourceBadge'), dot:$('sourceDot'), badgeText:$('sourceText')
+};
+
+/* Populate MBTI select */
+Object.entries(MBTI).forEach(([code,{name}]) => {
+  el.mbti.insertAdjacentHTML('beforeend', `<option value="${code}">${code} — ${name}</option>`);
+});
+el.mbti.value = 'INFP';
+const syncHint = () => { el.mbtiHint.textContent = MBTI[el.mbti.value]?.hint || ''; };
+el.mbti.addEventListener('change', syncHint);
+syncHint();
+
+/* Demo toggle */
+let demoNext = 'INFP';
+const syncDemoLabel = () => { el.demoNext.textContent = `(${demoNext})`; };
+syncDemoLabel();
+
+/* ══════════════════════════════════════════════════════════════════
+   State helpers
+   ══════════════════════════════════════════════════════════════════ */
+function setBadge(mode) {
+  const map = {
+    ready:  ['bg-stone-300',  'Ready'],
+    live:   ['bg-emerald-500','Live API'],
+    demo:   ['bg-accent',     'Demo data'],
+    offline:['bg-amber-500',  'Offline — demo data']
+  };
+  const [dotCls, text] = map[mode] || map.ready;
+  el.dot.className = `h-1.5 w-1.5 rounded-full ${dotCls}`;
+  el.badgeText.textContent = text;
+}
+
+function showState(name) {
+  el.empty.classList.toggle('hidden', name !== 'empty');
+  el.loading.classList.toggle('hidden', name !== 'loading');
+  el.result.classList.toggle('hidden', name !== 'result');
+}
+
+function setBusy(busy) {
+  el.submitBtn.disabled = busy;
+  el.submitIdle.classList.toggle('hidden', busy);
+  el.submitIdle.classList.toggle('flex', !busy);
+  el.submitBusy.classList.toggle('hidden', !busy);
+  el.submitBusy.classList.toggle('flex', busy);
+}
+
+const LOADING_STEPS = [
+  'Reading the weather for your dates…',
+  'Checking what’s on locally this week…',
+  'Separating the local spots from the tourist ones…',
+  'Working out the smartest way between each stop…',
+  'Matching every choice to your type…'
+];
+let stepTimer = null;
+function runLoadingSteps() {
+  let i = 0;
+  el.loadingStep.textContent = LOADING_STEPS[0];
+  clearInterval(stepTimer);
+  stepTimer = setInterval(() => {
+    i = (i + 1) % LOADING_STEPS.length;
+    el.loadingStep.textContent = LOADING_STEPS[i];
+  }, 900);
+}
+const stopLoadingSteps = () => clearInterval(stepTimer);
+
+/* ══════════════════════════════════════════════════════════════════
+   Fallback construction
+   ══════════════════════════════════════════════════════════════════ */
+function pickMock(mbtiCode) {
+  if (MOCK[mbtiCode]) return MOCK[mbtiCode];
+  // No exact mock for this type — pick by attitude (I/E), the axis that
+  // most visibly changes the shape of a day.
+  return mbtiCode.startsWith('E') ? MOCK.ESTJ : MOCK.INFP;
+}
+
+function buildFallback(input) {
+  const base = pickMock(input.mbti);
+  const data = structuredClone(base);
+  // Reflect what the user actually typed, so the fallback never looks canned.
+  data.trip = { ...data.trip, ...input };
+  data.trip.mbti = input.mbti;
+  return data;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   Rendering
+   ══════════════════════════════════════════════════════════════════ */
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function renderChips(chips = []) {
+  if (!chips.length) return '';
+  return `<div class="mt-3 flex flex-wrap gap-1.5">${chips.map(c => {
+    const s = chipStyle(c.type);
+    return `<span class="inline-flex items-center gap-1.5 rounded-lg border ${s.cls} px-2.5 py-1 text-[11px] font-medium leading-snug">
+      <span class="emoji text-[13px] leading-none">${c.icon || s.icon}</span>${esc(c.text)}
+    </span>`;
+  }).join('')}</div>`;
+}
+
+function renderItem(item, idx) {
+  return `
+  <li class="relative pl-14 sm:pl-[72px] unwrap" style="animation-delay:${idx * 55}ms">
+    <!-- time + node -->
+    <div class="absolute left-0 top-0 w-11 sm:w-14 text-right">
+      <span class="font-display text-[15px] sm:text-base leading-none text-ink">${esc(item.time)}</span>
+      ${item.duration && item.duration !== '—'
+        ? `<span class="mt-1 block text-[10px] text-stone-400">${esc(item.duration)}</span>` : ''}
+    </div>
+    <span class="absolute left-[46px] sm:left-[59px] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-paper bg-accent ring-1 ring-accent/30"></span>
+
+    <div class="rounded-xl border border-line bg-card p-4 shadow-[0_1px_2px_rgba(28,25,23,.03)] transition hover:border-stone-300 hover:shadow-[0_2px_10px_-4px_rgba(28,25,23,.12)]">
+      <div class="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+        <h4 class="font-display text-lg leading-snug">${esc(item.title)}</h4>
+        ${item.place ? `<span class="text-[11px] text-muted">· ${esc(item.place)}</span>` : ''}
+      </div>
+
+      ${item.reason ? `
+      <div class="mt-2.5 rounded-lg border-l-2 border-accent bg-accent/[.05] py-2 pl-3 pr-3">
+        <p class="text-[13px] leading-relaxed text-stone-700">
+          <span class="font-semibold text-accent">Why you:</span> ${esc(item.reason)}
+        </p>
+      </div>` : ''}
+
+      ${renderChips(item.chips)}
+    </div>
+  </li>`;
+}
+
+function renderDay(day, active) {
+  return `
+  <div class="day-panel ${active ? '' : 'hidden'}" data-day="${day.day}">
+    <div class="mb-4 flex items-baseline gap-3">
+      <h3 class="font-display text-2xl">Day ${day.day}</h3>
+      <span class="text-xs text-muted">${esc(day.date || '')}</span>
+      ${day.title ? `<span class="ml-auto text-xs italic text-accent2">${esc(day.title)}</span>` : ''}
+    </div>
+    <div class="relative">
+      <span class="rail absolute left-[51px] sm:left-[64px] top-2 bottom-2 w-px bg-line"></span>
+      <ol class="space-y-4">${day.items.map(renderItem).join('')}</ol>
+    </div>
+  </div>`;
+}
+
+function render(data) {
+  const t = data.trip || {};
+  const type = MBTI[t.mbti] || {name:'', hint:''};
+  const days = data.days || [];
+
+  el.result.innerHTML = `
+    <!-- Trip header -->
+    <div class="unwrap overflow-hidden rounded-2xl border border-line bg-deep text-white">
+      <div class="px-6 py-6 sm:px-8 sm:py-7">
+        <div class="flex flex-wrap items-center gap-2 text-[11px] text-white/60">
+          <span class="rounded-full bg-white/10 px-2.5 py-1 font-semibold tracking-wide text-white">${esc(t.mbti)} · ${esc(type.name)}</span>
+          <span>${esc(t.origin)} → ${esc(t.destination)}</span>
+          <span class="text-white/30">|</span>
+          <span>${esc(t.dates)}</span>
+        </div>
+        <h2 class="mt-3 font-display text-[26px] leading-tight sm:text-[32px]">${esc(t.headline || 'Your itinerary')}</h2>
+        ${t.summary ? `<p class="mt-2.5 max-w-2xl text-sm leading-relaxed text-white/70">${esc(t.summary)}</p>` : ''}
+      </div>
+    </div>
+
+    <!-- Briefing: the omotenashi layer -->
+    ${(data.briefing || []).length ? `
+    <div class="unwrap" style="animation-delay:80ms">
+      <div class="mb-3 flex items-baseline gap-2.5">
+        <h3 class="font-display text-xl">Before you asked</h3>
+        <span class="text-[11px] text-muted">Six things a local friend would mention</span>
+      </div>
+      <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        ${data.briefing.map(b => {
+          const s = chipStyle(b.type);
+          return `<div class="rounded-xl border border-line bg-card p-4 transition hover:border-stone-300">
+            <div class="flex items-start gap-2.5">
+              <span class="emoji grid h-8 w-8 shrink-0 place-items-center rounded-lg border ${s.cls} text-base">${b.icon || s.icon}</span>
+              <div class="min-w-0">
+                <p class="text-[13px] font-semibold leading-snug">${esc(b.title)}</p>
+                <p class="mt-1 text-[12px] leading-relaxed text-muted">${esc(b.text)}</p>
+              </div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>` : ''}
+
+    <!-- Day tabs -->
+    ${days.length ? `
+    <div class="unwrap" style="animation-delay:140ms">
+      <div class="sticky top-[73px] z-20 -mx-1 mb-4 flex gap-1.5 overflow-x-auto bg-paper/90 px-1 py-2 backdrop-blur">
+        ${days.map((d,i) => `
+          <button type="button" data-tab="${d.day}"
+            class="day-tab shrink-0 rounded-full border px-4 py-1.5 text-xs font-semibold transition ${
+              i === 0 ? 'border-ink bg-ink text-white' : 'border-line bg-card text-muted hover:border-stone-300 hover:text-ink'}">
+            Day ${d.day}<span class="ml-1.5 font-normal opacity-60">${esc((d.date||'').replace(/^\w+,\s*/,''))}</span>
+          </button>`).join('')}
+        <button type="button" data-tab="all"
+          class="day-tab shrink-0 rounded-full border border-line bg-card px-4 py-1.5 text-xs font-semibold text-muted transition hover:border-stone-300 hover:text-ink">
+          All days
+        </button>
+      </div>
+      <div id="dayPanels" class="space-y-10">
+        ${days.map((d,i) => renderDay(d, i === 0)).join('')}
+      </div>
+    </div>` : ''}
+  `;
+
+  // Tab wiring
+  el.result.querySelectorAll('.day-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const target = btn.dataset.tab;
+      el.result.querySelectorAll('.day-tab').forEach(b => {
+        const on = b === btn;
+        b.className = `day-tab shrink-0 rounded-full border px-4 py-1.5 text-xs font-semibold transition ${
+          on ? 'border-ink bg-ink text-white' : 'border-line bg-card text-muted hover:border-stone-300 hover:text-ink'}`;
+      });
+      el.result.querySelectorAll('.day-panel').forEach(p => {
+        const show = target === 'all' || p.dataset.day === target;
+        p.classList.toggle('hidden', !show);
+        if (show) {
+          // Re-trigger the stagger so a tab switch feels like an unwrap too.
+          p.querySelectorAll('.unwrap').forEach(n => {
+            n.style.animation = 'none'; void n.offsetHeight; n.style.animation = '';
+          });
+        }
+      });
+    });
+  });
+
+  showState('result');
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   Generation — API first, mock as the safety net
+   ══════════════════════════════════════════════════════════════════ */
+function readForm() {
+  return {
+    mbti: el.mbti.value,
+    origin: el.origin.value.trim() || 'Haneda Airport',
+    destination: el.destination.value.trim() || 'San Francisco',
+    dates: el.dates.value.trim() || '2026/10/01 - 10/03',
+    notes: el.notes.value.trim()
+  };
+}
+
+async function generate() {
+  const input = readForm();
+  setBusy(true);
+  showState('loading');
+  runLoadingSteps();
+  // #output, not the result div — that one is display:none while loading.
+  $('output').scrollIntoView({block:'start'});
+
+  let data, mode;
+  try {
+    // Don't let a hanging backend stall a live demo.
+    const ctl = new AbortController();
+    const timeout = setTimeout(() => ctl.abort(), 12000);
+
+    const res = await fetch('/api/generate', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(input),
+      signal: ctl.signal
+    });
+    clearTimeout(timeout);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    data = await res.json();
+    if (!data || !Array.isArray(data.days) || !data.days.length) throw new Error('Malformed payload');
+    mode = 'live';
+  } catch (err) {
+    console.warn('[omakase] API unavailable, falling back to bundled data:', err.message);
+    data = buildFallback(input);
+    mode = 'offline';
+    // A beat of latency so the fallback doesn't flash past — it should feel
+    // like the plan was made, not like an error was swallowed.
+    await new Promise(r => setTimeout(r, 700));
+  }
+
+  stopLoadingSteps();
+  setBusy(false);
+  setBadge(mode);
+  render(data);
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   Events
+   ══════════════════════════════════════════════════════════════════ */
+el.form.addEventListener('submit', e => { e.preventDefault(); generate(); });
+
+function loadDemo(which, {scroll = true} = {}) {
+  const preset = DEMO_INPUTS[which];
+  el.mbti.value = preset.mbti;
+  el.origin.value = preset.origin;
+  el.destination.value = preset.destination;
+  el.dates.value = preset.dates;
+  el.notes.value = preset.notes;
+  syncHint();
+
+  // Instant render — no network, nothing to fail in front of judges.
+  setBadge('demo');
+  render(structuredClone(MOCK[preset.mbti]));
+  if (scroll) $('output').scrollIntoView({block:'start', behavior:'smooth'});
+
+  demoNext = which === 'INFP' ? 'ESTJ' : 'INFP';
+  syncDemoLabel();
+}
+
+el.demoBtn.addEventListener('click', () => loadDemo(demoNext));
+
+setBadge('ready');
+
+// ?demo=INFP / ?demo=ESTJ — a bookmarkable demo, and a URL you can hand to
+// someone else without walking them through the form first.
+const requested = (new URLSearchParams(location.search).get('demo') || '').toUpperCase();
+// Don't yank the viewport on a fresh page load — the user hasn't asked to move.
+if (DEMO_INPUTS[requested]) loadDemo(requested, {scroll: false});
+</script>
+</body>
+</html>
